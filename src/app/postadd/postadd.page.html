@@ -1,0 +1,93 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>PostAd</ion-title>
+  </ion-toolbar>
+</ion-header>
+<ion-content padding>
+  <form #form="ngForm" (ngSubmit)="createAd(form)" method="post">
+    <ion-item>
+        <ion-label position="floating">First Name</ion-label>
+        <ion-input ngModel name="fName"></ion-input>
+    </ion-item>
+  
+    <ion-item>
+      <ion-label position="floating">Last Name</ion-label>
+      <ion-input ngModel name="lName"></ion-input>
+    </ion-item>
+  
+    <ion-item>
+      <ion-label position="floating">Email</ion-label>
+      <ion-input type="email" ngModel name="email"></ion-input>
+    </ion-item>
+    <ion-item>
+      <ion-label position="floating">Phone Number</ion-label>
+      <ion-input ngModel name="phoneNumber"></ion-input>
+    </ion-item>
+       
+    <ion-item >
+      <ion-label position="floating">PostalCode</ion-label>
+      <ion-input ngModel name="postalCode"></ion-input>
+    </ion-item> 
+    <ion-item>
+      <ion-label position="floating">Monthly Rent</ion-label>
+      <ion-input ngModel name="mrent"></ion-input>
+    </ion-item>
+    <ion-item>
+      <ion-label position="floating">Advance/Deposit Amount</ion-label>
+      <ion-input ngModel name="deposit"></ion-input>
+    </ion-item>
+    <ion-item >
+      <ion-label position="floating">Description</ion-label>
+      <ion-input ngModel name="description"></ion-input>
+    </ion-item> 
+    <ion-item>
+    <ion-toolbar>
+      <ion-input  ngModel name="address" (ionInput)="UpdateSearchResults()" placeholder="Address"  (ionClear)="ClearAutocomplete()"></ion-input >
+    </ion-toolbar>
+    <ion-list [hidden]="autocompleteItems.length == 0">
+      <ion-item *ngFor="let item of autocompleteItems" tappable (click)="SelectSearchResult(item)">
+        {{ item.description }}
+      </ion-item>
+    </ion-list>
+    <ion-row>    
+      <ion-col  size="6">
+        <ion-button (click)="loadMap()" shape="round" fill="outline">
+          <ion-icon slot="start" name="locate"></ion-icon>
+            Current Location
+          </ion-button>
+      </ion-col>
+    </ion-row>
+  </ion-item>
+
+  <ion-item>
+    <ion-label>
+      <ion-row>
+        <ion-col size="6">
+          <ion-button color="danger" type="button" expand="full" shape="round" size="large" (click)="takePhoto()">
+            <ion-icon name="camera"></ion-icon>
+          </ion-button>
+        </ion-col>
+        <ion-col size="6">
+          <ion-button color="secondary" type="button" expand="full" shape="round" size="large" (click)="selectPhoto()">
+            <ion-icon name="image"></ion-icon>
+          </ion-button>
+        </ion-col>
+      </ion-row>
+    </ion-label>
+  </ion-item>
+  <ion-item *ngIf="error">
+    <ion-label>
+      <strong>{{error}}</strong>
+    </ion-label>
+  </ion-item>
+  <ion-item>
+    <ion-label>
+      <img *ngIf="myPhoto" [src]="myPhoto"/>
+    </ion-label>
+  </ion-item>
+
+ 
+    <ion-button type="submit" expand="full" color="danger">PostAd</ion-button>
+  </form>
+ 
+</ion-content>  

@@ -1,5 +1,7 @@
 {
   "name": "tolet",
-  "integrations": {},
+  "integrations": {
+    "cordova": {}
+  },
   "type": "angular"
 }
