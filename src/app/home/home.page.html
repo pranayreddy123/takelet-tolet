@@ -1,8 +1,6 @@
 <ion-header>
   <ion-toolbar color="primary">
-    <ion-title>
-      Map
-    </ion-title>
+
     <ion-searchbar [(ngModel)]="autocomplete.input" (ionInput)="UpdateSearchResults()" placeholder="Search for a place"  (ionClear)="ClearAutocomplete()"></ion-searchbar>
   </ion-toolbar>
   <ion-list [hidden]="autocompleteItems.length == 0">

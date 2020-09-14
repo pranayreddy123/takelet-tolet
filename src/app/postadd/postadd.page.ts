@@ -1,12 +1,19 @@
-import { ChangeDetectorRef,Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, NgZone } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Geolocation } from '@ionic-native/geolocation/ngx';
 import { NgForm } from '@angular/forms';
 import { NativeGeocoder, NativeGeocoderResult, NativeGeocoderOptions } from '@ionic-native/native-geocoder/ngx';
+import { Camera, CameraOptions, PictureSourceType } from '@ionic-native/Camera/ngx';
 import { NgStyle } from '@angular/common';
 import { HttpHeaders } from '@angular/common/http';
-import {LoadingController, ToastController} from '@ionic/angular';
-
+import { LoadingController, ToastController } from '@ionic/angular';
+import { Platform, ActionSheetController } from '@ionic/angular';
+import { File, FileEntry } from '@ionic-native/File/ngx';
+import { WebView } from '@ionic-native/ionic-webview/ngx';
+import { Storage } from '@ionic/storage';
+import { FilePath } from '@ionic-native/file-path/ngx';
+declare var google;
+const STORAGE_KEY = 'my_images';
 
 @Component({
   selector: 'app-postadd',
@@ -18,23 +25,50 @@ export class PostaddPage implements OnInit {
   // Readable Address
   address: string;
   adInfo: any;
-  file: any;
   public myPhoto: any;
   public error: string;
   private loading: any;
+  autocomplete: { input: string; };
+  autocompleteItems: any[];
+  GoogleAutocomplete: any;
+  geocoder: any;
 
+  images = [];
   // Location coordinates
   latitude: number;
   longitude: number;
   accuracy: number;
 
-  constructor(private http: HttpClient, private geolocation: Geolocation, private nativeGeocoder: NativeGeocoder, private readonly changeDetectorRef: ChangeDetectorRef,  private readonly loadingCtrl: LoadingController,
-    private readonly toastCtrl: ToastController) { }
+  constructor(private http: HttpClient, private geolocation: Geolocation, private nativeGeocoder: NativeGeocoder, private readonly changeDetectorRef: ChangeDetectorRef, private readonly loadingCtrl: LoadingController,
+    private readonly toastCtrl: ToastController,
+    public zone: NgZone, private plt: Platform, private actionSheetCtrl: ActionSheetController, private toastController: ToastController, private storage: Storage, private loadingController: LoadingController,
+    private ref: ChangeDetectorRef, private filePath: FilePath, private camera: Camera, private webview: WebView, private file:File) {
+    this.GoogleAutocomplete = new google.maps.places.AutocompleteService();
+    this.geocoder = new google.maps.Geocoder();
+    this.autocomplete = { input: '' };
+    this.autocompleteItems = [];
+  }
   ngOnInit() {
     this.adInfo = { latitude: "", longitude: "", imageBlob: Blob };
     this.getGeolocation();
+    this.plt.ready().then(() => {
+      this.loadStoredImages();
+    });
   }
-
+ 
+  loadStoredImages() {
+    this.storage.get(STORAGE_KEY).then(images => {
+      if (images) {
+        let arr = JSON.parse(images);
+        this.images = [];
+        for (let img of arr) {
+          let filePath = this.file.dataDirectory + img;
+          let resPath = this.pathForImage(filePath);
+          this.images.push({ name: img, path: resPath, filePath: filePath });
+        }
+      }
+    });
+  }
 
 
   //Geocoder configuration
@@ -64,38 +98,14 @@ export class PostaddPage implements OnInit {
 
 
     var formData = new FormData();
-    formData.append('file', this.file);
+    //formData.append('file', this.file);
     formData.append('location', new Blob([JSON.stringify(postData)], {
       type: "application/json"
     }));
-    
+
   }
 
-  loadImageFromDevice(event) {
 
-    this.file = event.target.files[0];
-
-
-    const reader = new FileReader();
-
-    reader.readAsArrayBuffer(this.file);
-
-    reader.onload = () => {
-
-      // get the blob of the image:
-      this.adInfo.imageBlob = new Blob([new Uint8Array((reader.result as ArrayBuffer))]);
-      // create blobURL, such that we could use it in an image element:
-      let blobURL: string = URL.createObjectURL(this.adInfo.imageBlob);
-
-
-    };
-
-    reader.onerror = (error) => {
-
-      //handle errors
-
-    };
-  }
 
 
   //Get current coordinates of device
@@ -141,103 +151,222 @@ export class PostaddPage implements OnInit {
     return address.slice(0, -2);
   }
 
+  async selectImageSource() {
+    const buttons = [
+      {
+        text: 'camera',
+        icon: 'camera',
+        handler: () => {
+          this.takeCamPhoto();
+        }
+      },
+      {
+        text: 'browse images',
+        icon: 'image',
+        handler: () => {
+          this.browsePhoto();
+        }
+      }
+    ];
 
-  takePhoto() {
-    // @ts-ignore
-    const camera: any = navigator.camera;
-    camera.getPicture(imageData => {
-      this.myPhoto = this.convertFileSrc(imageData);
-      this.changeDetectorRef.detectChanges();
-      this.changeDetectorRef.markForCheck();
-      this.uploadPhoto(imageData);
-    }, error => this.error = JSON.stringify(error), {
-      quality: 100,
-      destinationType: camera.DestinationType.FILE_URI,
-      sourceType: camera.PictureSourceType.CAMERA,
-      encodingType: camera.EncodingType.JPEG
-    });
-  }
-
-  selectPhoto(): void {
-    // @ts-ignore
-    const camera: any = navigator.camera;
-    camera.getPicture(imageData => {
-      this.myPhoto = this.convertFileSrc(imageData);
-      this.uploadPhoto(imageData);
-    }, error => this.error = JSON.stringify(error), {
-      sourceType: camera.PictureSourceType.PHOTOLIBRARY,
-      destinationType: camera.DestinationType.FILE_URI,
-      quality: 100,
-      encodingType: camera.EncodingType.JPEG,
-    });
-  }
-
-  private convertFileSrc(url: string): string {
-    if (!url) {
-      return url;
-    }
-    if (url.startsWith('/')) {
-      // @ts-ignore
-      return window.WEBVIEW_SERVER_URL + '/_app_file_' + url;
-    }
-    if (url.startsWith('file://')) {
-      // @ts-ignore
-      return window.WEBVIEW_SERVER_URL + url.replace('file://', '/_app_file_');
-    }
-    if (url.startsWith('content://')) {
-      // @ts-ignore
-      return window.WEBVIEW_SERVER_URL + url.replace('content:/', '/_app_content_');
-    }
-    return url;
-  }
-
-  private async uploadPhoto(imageFileUri: any) {
-    this.error = null;
-    this.loading = await this.loadingCtrl.create({
-      message: 'Uploading...'
-    });
-
-    this.loading.present();
-
-    // @ts-ignore
-    window.resolveLocalFileSystemURL(imageFileUri,
-      entry => {
-        entry.file(file => this.readFile(file));
+    // Only allow file selection inside a browser
+    if (!this.plt.is('hybrid')) {
+      buttons.push({
+        text: 'Choose a File',
+        icon: 'attach',
+        handler: () => {
+          // this.fileInput.nativeElement.click();
+        }
       });
+    }
+
+    const actionSheet = await this.actionSheetCtrl.create({
+      buttons
+    });
+    await actionSheet.present();
   }
 
-  private readFile(file: any) {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const formData = new FormData();
-      const imgBlob = new Blob([reader.result], {type: file.type});
-      formData.append('file', imgBlob, file.name);
-     // this.postData(formData);
-    };
-    reader.readAsArrayBuffer(file);
-  }
 
- 
 
-  private async showToast(ok: boolean | {}) {
-    if (ok === true) {
-      const toast = await this.toastCtrl.create({
-        message: 'Upload successful',
-        duration: 3000,
-        position: 'top'
-      });
-      toast.present();
+
+
+
+  pathForImage(img) {
+    if (img === null) {
+      return '';
     } else {
-      const toast = await this.toastCtrl.create({
-        message: 'Upload failed',
-        duration: 3000,
-        position: 'top'
-      });
-      toast.present();
+      let converted = this.webview.convertFileSrc(img);
+      return converted;
     }
   }
 
- 
+
+  async presentToast(text) {
+    const toast = await this.toastController.create({
+      message: text,
+      position: 'bottom',
+      duration: 3000
+    });
+    toast.present();
+  }
+
+
+  createFileName() {
+    var d = new Date(),
+      n = d.getTime(),
+      newFileName = n + ".jpg";
+    return newFileName;
+  }
+
+  copyFileToLocalDir(namePath, currentName, newFileName) {
+    alert(this.file.dataDirectory);
+    alert(currentName);
+    alert(namePath);
+    alert(newFileName);
+    this.file.copyFile(namePath, currentName, this.file.dataDirectory, newFileName).then(success => {
+      this.updateStoredImages(newFileName);
+    }, error => {
+      alert('Error while storing file.');
+      this.presentToast('Error while storing file.');
+    });
+  }
+
+  updateStoredImages(name) {
+    alert("updateStoredImages");
+    alert(name);
+    this.storage.get(STORAGE_KEY).then(images => {
+      let arr = JSON.parse(images);
+      if (!arr) {
+        let newImages = [name];
+        this.storage.set(STORAGE_KEY, JSON.stringify(newImages));
+      } else {
+        arr.push(name);
+        this.storage.set(STORAGE_KEY, JSON.stringify(arr));
+      }
+
+      let filePath = this.file.dataDirectory + name;
+      let resPath = this.pathForImage(filePath);
+
+      let newEntry = {
+        name: name,
+        path: resPath,
+        filePath: filePath
+      };
+
+      this.images = [newEntry, ...this.images];
+      alert(this.images);
+      this.ref.detectChanges(); // trigger change detection cycle
+    });
+  }
+
+  startUpload(imgEntry) {
+    
+}
+
+  takeCamPhoto() {
+    var options: CameraOptions = {
+      quality: 100,
+      sourceType: this.camera.PictureSourceType.CAMERA,
+      saveToPhotoAlbum: false,
+      correctOrientation: true
+    };
+    this.camera.getPicture(options).then(imageData => {
+      var currentName = imageData.substr(imageData.lastIndexOf('/') + 1);
+      var correctPath = imageData.substr(0, imageData.lastIndexOf('/') + 1);
+      this.copyFileToLocalDir(correctPath, currentName, this.createFileName());
+    });
+  }
+
+  browsePhoto(): void {
+    var options: CameraOptions = {
+      quality: 100,
+      sourceType: this.camera.PictureSourceType.PHOTOLIBRARY,
+      saveToPhotoAlbum: false,
+      correctOrientation: true
+    };
+
+    this.camera.getPicture(options).then(imageData => {
+      if (this.plt.is('android')) {
+        this.filePath.resolveNativePath(imageData)
+          .then(filePath => {
+            let correctPath = filePath.substr(0, filePath.lastIndexOf('/') + 1);
+            let currentName = imageData.substring(imageData.lastIndexOf('/') + 1, imageData.lastIndexOf('?'));
+            this.copyFileToLocalDir(correctPath, currentName, this.createFileName());
+          });
+      } else {
+        alert("ios");
+        var currentName = imageData.substr(imageData.lastIndexOf('/') + 1);
+        var correctPath = imageData.substr(0, imageData.lastIndexOf('/') + 1);
+        this.copyFileToLocalDir(correctPath, currentName, this.createFileName());
+      }
+    });
+
+  }
+
+
+
+
+
+
+
+
+
+  //AUTOCOMPLETE, SIMPLY LOAD THE PLACE USING GOOGLE PREDICTIONS AND RETURNING THE ARRAY.
+  UpdateSearchResults() {
+    alert('called')
+    if (this.autocomplete.input == '') {
+      this.autocompleteItems = [];
+      return;
+    }
+    this.GoogleAutocomplete.getPlacePredictions({ input: this.autocomplete.input },
+      (predictions, status) => {
+        this.autocompleteItems = [];
+
+        this.zone.run(() => {
+          predictions.forEach((prediction) => {
+
+            this.autocompleteItems.push(prediction);
+          });
+        });
+      });
+  }
+
+  //wE CALL THIS FROM EACH ITEM.
+  SelectSearchResult(item) {
+    this.autocomplete.input = item.description;
+    this.autocompleteItems = [];
+    this.geocoder.geocode({ 'address': item.description }, (results, status) => {
+      if (status === 'OK' && results[0]) {
+        let latLng = new google.maps.LatLng(results[0].geometry.location.lat(), results[0].geometry.location.lng());
+        let mapOptions = {
+          center: latLng,
+          zoom: 15,
+          mapTypeId: google.maps.MapTypeId.ROADMAP
+        }
+
+
+
+
+        // //LOAD THE MAP WITH THE PREVIOUS VALUES AS PARAMETERS.
+        // this.getAddressFromCoords(results[0].geometry.location.lat,results[0].geometry.location.lng); 
+        // this.map = new google.maps.Map(this.mapElement.nativeElement, mapOptions); 
+        // this.map.addListener('tilesloaded', () => {
+        //   console.log('accuracy',this.map, this.map.center.lat());
+        //   this.getAddressFromCoords(this.map.center.lat(), this.map.center.lng())
+        //   this.lat = this.map.center.lat()
+        //   this.long = this.map.center.lng()
+        // });
+      }
+    });
+  }
+  ClearAutocomplete() {
+    this.autocompleteItems = []
+    this.autocomplete.input = ''
+  }
+
+
+
+
 
 }
 
