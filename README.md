@@ -9,6 +9,6 @@ check out the code
 ✔ Creating ./www directory for you in 2.53ms
 ? What platform would you like to build (android, ios): android
 
-5)cordova run browser
+5) > cordova run browser
   
   verify http://localhost:8000/tabs/listview
